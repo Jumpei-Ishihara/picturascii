@@ -24,13 +24,14 @@ export class GlyphAtlas {
       const g = this.meta.glyphs[ch];
       if (!g || this.sheets.has(ch)) continue;
       jobs.push((async () => {
-        const img = new Image();
-        img.src = new URL(`glyphs/${g.file}`, this.baseUrl).href;
-        await img.decode();
+        // img.decode() は非表示タブで止まることがあるため createImageBitmap を使う
+        const res = await fetch(new URL(`glyphs/${g.file}`, this.baseUrl));
+        const img = await createImageBitmap(await res.blob(), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
         const cv = document.createElement('canvas');
         cv.width = g.w; cv.height = g.h;
         const ctx = cv.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(img, 0, 0);
+        img.close();
         const px = ctx.getImageData(0, 0, g.w, g.h).data;
         const data = new Uint8Array(g.w * g.h);
         for (let i = 0; i < data.length; i++) data[i] = px[i * 4];

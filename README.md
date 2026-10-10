@@ -3,15 +3,24 @@
 Turn the subject of a picture, video, or camera feed into living ASCII.
 Everything runs in the browser — no uploads, no server.
 
-> Status: **W0** — the rendering core is ported from the desktop app
-> (AI Object Detection Visualizer, Python/OpenCV) to JavaScript + WebGL2
-> and verified against it. The public web UI is the next step (W1).
+> Status: **W1** — public web UI (v0.1). The rendering core is ported from the
+> desktop app (AI Object Detection Visualizer, Python/OpenCV) to JavaScript +
+> WebGL2 and verified against it.
+
+## Features (v0.1)
+
+- **Sources:** built-in animated sample, image / video files (open or drop), camera
+- **Detect:** FULL, AUTO (dark background → brightness, bright → color), CHROMA with an eyedropper; invert
+- **Characters:** digits, hex, binary, ASCII ramp, symbols, or your own text; pick by brightness or at random
+- **Look:** hue or per-cell source color, gamma, color range, saturation, background color, 3-scale glow, pulse, size animation, NORMAL / ADD / SCREEN blending
+- **Output:** JPEG snapshot, WebM recording (MP4 where the browser only records MP4), output size up to the source resolution
+- Seven presets; settings are remembered in this browser
 
 ## How it works
 
 | Stage | Where | Port of (desktop `visualizer.py`) |
 |---|---|---|
-| Subject mask — FULL / AUTO / CHROMA | CPU (`src/detect.js`) | `detect_silhouette`, `_mask_chroma_bg`, `_postprocess_mask` |
+| Subject mask — FULL / AUTO / CHROMA | CPU (`src/detect.js`), at ≤480 px wide for live use | `detect_silhouette`, `_mask_chroma_bg`, `_postprocess_mask` |
 | Character grid, density mapping, deterministic animation | CPU (`src/grid.js`) | `draw_silhouette_grid` |
 | 3-scale glow, background, opacity, blend modes | GPU (`src/gl.js`) | `_multi_glow`, `process_frame`, `_composite` |
 
@@ -21,11 +30,13 @@ Random values (splitmix64 hashes, Python's MT19937) are reproduced bit-for-bit.
 
 ## Development
 
-Serve the folder with any static server, e.g.
+Serve the folder with any static server. `tools/serve.py` disables caching for development:
 
 ```bash
-python3 -m http.server 8765 --bind 127.0.0.1
+python3 tools/serve.py 8765
 ```
+
+Then open `http://127.0.0.1:8765/`. There is no build step.
 
 ### Tests
 

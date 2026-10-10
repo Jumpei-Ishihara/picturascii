@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PICTURASCII</title>
+<meta name="description" content="Turn the subject of a picture, video, or camera into living ASCII. Runs entirely in your browser — nothing is uploaded.">
+<meta name="theme-color" content="#070908">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23070908'/%3E%3Ctext x='16' y='23' font-family='monospace' font-size='20' font-weight='700' text-anchor='middle' fill='%230aff50'%3E@%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1 class="wordmark">PICTURASCII</h1>
+    <span class="ramp" aria-hidden="true">.:-=+*#%@</span>
+  </div>
+  <p class="tagline">Your subject, rewritten in ASCII. <span lang="ja">写した被写体を、動く文字に。</span></p>
+  <p class="privacy"><span class="dot" aria-hidden="true"></span>Runs entirely in your browser — nothing is uploaded.</p>
+</header>
+
+<main class="app">
+  <section class="stage-col" aria-label="Preview">
+    <div id="stage" class="stage">
+      <canvas id="out" aria-label="PICTURASCII output"></canvas>
+      <div class="hud hud-tl" id="hud-left"></div>
+      <div class="hud hud-tr" id="hud-right"></div>
+      <div class="hud hud-bl rec" id="rec-indicator" hidden>● REC 00:00</div>
+      <div class="stage-msg" id="stage-msg" role="status" hidden></div>
+      <div class="drop-hint" aria-hidden="true">DROP IMAGE OR VIDEO</div>
+    </div>
+
+    <div class="toolbar">
+      <div class="group" role="group" aria-label="Source">
+        <button type="button" class="btn" data-src="sample">SAMPLE</button>
+        <button type="button" class="btn" data-src="file">OPEN FILE</button>
+        <button type="button" class="btn" data-src="camera">CAMERA</button>
+        <input type="file" id="file" accept="image/*,video/*" hidden>
+      </div>
+      <div class="group" role="group" aria-label="Output">
+        <button type="button" class="btn" id="btn-play" aria-pressed="false">❚❚ PAUSE</button>
+        <button type="button" class="btn" id="btn-snap">SAVE JPEG</button>
+        <button type="button" class="btn btn-rec" id="btn-rec" aria-pressed="false">● REC</button>
+        <label class="size">
+          <span>SIZE</span>
+          <select id="out-size">
+            <option value="0">SOURCE</option>
+            <option value="1920">1920</option>
+            <option value="1280" selected>1280</option>
+            <option value="960">960</option>
+            <option value="640">640</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel-col" aria-label="Controls">
+    <div class="presets-head">
+      <span class="lbl">PRESETS</span>
+      <button type="button" class="btn-sm" id="btn-reset">RESET</button>
+    </div>
+    <div class="presets" id="presets"></div>
+    <div id="panel"></div>
+  </aside>
+</main>
+
+<footer class="foot">
+  <p>Space: play / pause · Drop a file anywhere · Images, videos and camera frames never leave this device.</p>
+  <p>PICTURASCII — web edition of AI Object Detection Visualizer.</p>
+</footer>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

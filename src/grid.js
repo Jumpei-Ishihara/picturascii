@@ -28,7 +28,11 @@ function cellDominantColor(rgba, w, h, cy, cx, cellSize, counts) {
   return [((best >> 8) & 15) * 16 + 8, ((best >> 4) & 15) * 16 + 8, (best & 15) * 16 + 8];
 }
 
-export function buildLayer({ rgba, w, h, mask, frameIdx, cfg, atlas }) {
+/**
+ * mask は mw×mh（検出を縮小解像度で行った場合は w×h より小さい）。null なら全面。
+ * buffers は呼び出し側で保持し、フレーム間で使い回す。
+ */
+export function buildLayer({ rgba, w, h, mask, mw = w, mh = h, frameIdx, cfg, atlas, buffers = {} }) {
   const cellSize = dynamicCellSize(frameIdx, cfg);
   const intensity = cfg.grid_intensity;
   const speed = cfg.anim_speed;
@@ -60,9 +64,16 @@ export function buildLayer({ rgba, w, h, mask, frameIdx, cfg, atlas }) {
   const dsMax = Math.max(dsMin, cfg.digit_scale_max);
   const density = cfg.char_mode === 'density';
 
-  const layer = new Uint8Array(w * h * 4);
+  if (buffers.size !== w * h) {
+    buffers.size = w * h;
+    buffers.layer = new Uint8Array(w * h * 4);
+    buffers.intensity = new Uint8Array(w * h);
+  }
+  const layer = buffers.layer;
+  layer.fill(0);
   // HUE モード: 強度マップ（np.maximum で積み上げ）とセル色グリッド
-  const intensityMap = useMaterial ? null : new Uint8Array(w * h);
+  const intensityMap = useMaterial ? null : buffers.intensity;
+  if (intensityMap) intensityMap.fill(0);
   const colorGrid = useMaterial ? null : new Uint8Array(rows * cols * 3);
   const counts = useMaterial ? new Int32Array(4096) : null;
 
@@ -71,7 +82,7 @@ export function buildLayer({ rgba, w, h, mask, frameIdx, cfg, atlas }) {
     for (let c = 0; c < cols; c++) {
       const cx = Math.min(c * cellSize + (cellSize >> 1), w - 1);
       const pi = cy * w + cx;
-      if (mask && !mask[pi]) continue;
+      if (mask && !mask[Math.floor((cy * mh) / h) * mw + Math.floor((cx * mw) / w)]) continue;
       const p = pi * 4;
       const brt = lut[grayOf(rgba[p], rgba[p + 1], rgba[p + 2])];
       const alp = f32(Math.min(f32(brt * ip), 1));
@@ -148,8 +159,7 @@ export function buildLayer({ rgba, w, h, mask, frameIdx, cfg, atlas }) {
       }
     }
   }
-  for (let i = 3; i < layer.length; i += 4) layer[i] = 255;
-  return layer;
+  return layer; // A チャンネルは使わない
 }
 
 function lerpColor(t, dim, bright) {

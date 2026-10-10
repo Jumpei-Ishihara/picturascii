@@ -164,8 +164,8 @@ const closeOp = (m, w, h, k) => morph(morph(m, w, h, k, true), w, h, k, false);
  * visualizer._postprocess_mask: [OPEN→]CLOSE→微小領域除去→外輪郭の塗りつぶし。
  * 外輪郭の面積は画素数で近似する（cv2.contourArea より境界分だけ大きい）。
  */
-export function postprocessMask(mask, w, h, kClose, minAreaRatio, skipOpen = false) {
-  let m = skipOpen ? mask : openOp(mask, w, h, 3);
+export function postprocessMask(mask, w, h, kClose, minAreaRatio, skipOpen = false, kOpen = 3) {
+  let m = skipOpen ? mask : openOp(mask, w, h, kOpen);
   m = closeOp(m, w, h, kClose);
 
   // 8連結成分のラベリング
@@ -218,11 +218,14 @@ export function postprocessMask(mask, w, h, kClose, minAreaRatio, skipOpen = fal
   return out;
 }
 
+/** カーネルサイズを縮小率に合わせる（奇数を保つ） */
+const scaleKernel = (k, s) => (s === 1 ? k : Math.max(1, 2 * Math.round((k * s - 1) / 2) + 1));
+
 /**
  * visualizer.detect_silhouette。M0 は null（全面）を返す。
- * gray は M1 で必要になったときだけ計算して返す。
+ * kScale: 元解像度に対する rgba の縮小率。縮小画像で検出するときにカーネルサイズを合わせる。
  */
-export function detectSilhouette(rgba, w, h, cfg) {
+export function detectSilhouette(rgba, w, h, cfg, kScale = 1) {
   const mode = cfg.detect_mode;
   if (mode === 'm0') return { mask: null };
 
@@ -247,7 +250,7 @@ export function detectSilhouette(rgba, w, h, cfg) {
       kClose = 15; minAreaRatio = 0.01;
     }
   }
-  mask = postprocessMask(mask, w, h, kClose, minAreaRatio, false);
+  mask = postprocessMask(mask, w, h, scaleKernel(kClose, kScale), minAreaRatio, false, scaleKernel(3, kScale));
   if (cfg.mask_invert) for (let i = 0; i < mask.length; i++) mask[i] = 255 - mask[i];
   return { mask };
 }
