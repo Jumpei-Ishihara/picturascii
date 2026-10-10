@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PICTURASCII parity check</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 16px; background: #0b0d0c; color: #cfe8d4; font: 13px/1.5 ui-monospace, Menlo, monospace; }
+  h1 { font-size: 15px; margin: 0 0 12px; }
+  table { border-collapse: collapse; margin-bottom: 20px; }
+  td, th { border: 1px solid #2a332d; padding: 4px 10px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  .pass { color: #7dff9a; } .fail { color: #ff7d7d; }
+  .case { margin-bottom: 28px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row figure { margin: 0; }
+  .row canvas { width: 420px; max-width: 100%; height: auto; display: block; border: 1px solid #2a332d; }
+  figcaption { color: #7f9a86; }
+</style>
+</head>
+<body>
+<h1>PICTURASCII — Python (desktop) vs JS (web) parity</h1>
+<table id="summary"><thead><tr>
+  <th>case</th><th>PSNR dB</th><th>mean |Δ|</th><th>pixels |Δ|&gt;32</th><th>detect ms</th><th>grid ms</th><th>gl ms</th><th>result</th>
+</tr></thead><tbody></tbody></table>
+<div id="cases"></div>
+<script type="module" src="./compare.js"></script>
+</body>
+</html>

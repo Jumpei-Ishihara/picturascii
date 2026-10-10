@@ -1,0 +1,76 @@
+[
+  {
+    "id": "m0_default",
+    "image": "color_field.png",
+    "frame": 0,
+    "cfg": {}
+  },
+  {
+    "id": "m1_dark_ascii",
+    "image": "dark_figure.png",
+    "frame": 45,
+    "cfg": {
+      "detect_mode": "m1",
+      "char_set": "ascii",
+      "cell_size": 18,
+      "hue_shift": 120,
+      "glow_bloom": 1.2
+    }
+  },
+  {
+    "id": "m1_bright_random",
+    "image": "green_screen.png",
+    "frame": 10,
+    "cfg": {
+      "detect_mode": "m1",
+      "char_set": "hex",
+      "char_mode": "random",
+      "cell_size": 24,
+      "pulse_amp": 0.3
+    }
+  },
+  {
+    "id": "m4_material_whitebg",
+    "image": "green_screen.png",
+    "frame": 0,
+    "cfg": {
+      "detect_mode": "m4",
+      "color_source": "material",
+      "canvas_bg": [255, 255, 255],
+      "effect_brightness": 0.6,
+      "cell_size": 20
+    }
+  },
+  {
+    "id": "m0_sizeanim_add",
+    "image": "color_field.png",
+    "frame": 150,
+    "cfg": {
+      "char_set": "binary",
+      "size_anim": true,
+      "size_min": 0.3,
+      "size_max": 1.2,
+      "composite_mode": "add",
+      "composite_alpha": 0.6,
+      "grid_opacity": 0.8,
+      "saturation": 0.5
+    }
+  },
+  {
+    "id": "m1_invert_screen_custom",
+    "image": "dark_figure.png",
+    "frame": 200,
+    "cfg": {
+      "detect_mode": "m1",
+      "mask_invert": true,
+      "char_set": "custom",
+      "custom_chars": "PICTURASCII",
+      "char_mode": "random",
+      "cell_size": 16,
+      "composite_mode": "screen",
+      "composite_alpha": 0.7,
+      "color_range": 0.5,
+      "brightness_gamma": 0.8
+    }
+  }
+]
