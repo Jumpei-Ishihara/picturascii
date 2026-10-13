@@ -1,7 +1,7 @@
 // 見た目のプリセット。検出設定（モード・閾値など）は変えない。
 // 色は BGR、hue_shift は 0=緑 / 60=シアン / 120=青 / 180=マゼンタ / 240=黄 / 300=赤。
 
-export const DETECT_KEYS = ['detect_mode', 'threshold', 'hue_tolerance', 'sat_min', 'bg_color_hsv', 'mask_invert'];
+export const DETECT_KEYS = ['detect_mode', 'threshold', 'mp_confidence', 'mp_smooth_edge', 'mp_detail_mode', 'hue_tolerance', 'sat_min', 'bg_color_hsv', 'mask_invert'];
 
 export const PRESETS = [
   { id: 'matrix', label: 'MATRIX', cfg: {} },

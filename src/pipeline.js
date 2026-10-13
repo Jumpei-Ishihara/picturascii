@@ -5,11 +5,12 @@ import { detectSilhouette } from './detect.js';
 import { buildLayer } from './grid.js';
 import { GlyphAtlas } from './atlas.js';
 import { GlRenderer } from './gl.js';
+import { PersonSegmenter } from './person.js';
 
 function makeGrabber() {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  return (source, w, h, mirror) => {
+  const grab = (source, w, h, mirror) => {
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
     ctx.save();
     if (mirror) { ctx.translate(w, 0); ctx.scale(-1, 1); }
@@ -17,15 +18,22 @@ function makeGrabber() {
     ctx.restore();
     return ctx.getImageData(0, 0, w, h).data;
   };
+  grab.canvas = canvas;
+  return grab;
 }
+
+const DETECT_CFG_KEYS = ['detect_mode', 'threshold', 'mp_confidence', 'mp_smooth_edge', 'mp_detail_mode',
+  'hue_tolerance', 'sat_min', 'bg_color_hsv', 'mask_invert'];
+const detectKey = (cfg) => JSON.stringify(DETECT_CFG_KEYS.map((k) => cfg[k]));
 
 export class Picturascii {
   /**
    * @param {HTMLCanvasElement} outCanvas 出力先
    * @param {URL|string} assetsUrl assets/ ディレクトリの URL（末尾 / 付き）
    */
-  constructor(outCanvas, assetsUrl) {
+  constructor(outCanvas, assetsUrl, vendorUrl = new URL('../vendor/mediapipe/', assetsUrl)) {
     this.gl = new GlRenderer(outCanvas);
+    this.person = new PersonSegmenter(vendorUrl);
     this.atlas = new GlyphAtlas(assetsUrl);
     this.grabFull = makeGrabber();
     this.grabSmall = makeGrabber();
@@ -57,18 +65,28 @@ export class Picturascii {
    * 画像・動画・canvas を w×h で処理する。
    * 検出は detectWidth を上限に縮小して行う（マスクはセル中心でしか参照しないため）。
    */
-  renderSource(source, w, h, frameIdx, cfg, { mirror = false, detectWidth = 480 } = {}) {
+  renderSource(source, w, h, frameIdx, cfg, { mirror = false, detectWidth = 480, staticKey = null } = {}) {
     const rgba = this.grabFull(source, w, h, mirror);
     let det = { mask: null };
     const t0 = performance.now();
-    if (cfg.detect_mode !== 'm0') {
-      if (w > detectWidth) {
-        const dw = detectWidth, dh = Math.max(1, Math.round((h * dw) / w));
-        const small = this.grabSmall(source, dw, dh, mirror);
-        det = { ...detectSilhouette(small, dw, dh, cfg, dw / w), mw: dw, mh: dh };
-      } else {
-        det = detectSilhouette(rgba, w, h, cfg);
+    // 静止画は入力が変わらないので、検出設定が同じなら前回のマスクを使う
+    const key = staticKey && `${staticKey}|${w}x${h}|${detectKey(cfg)}|${this.person.state}`;
+    if (key && this.detCache?.key === key) {
+      det = this.detCache.det;
+    } else if (cfg.detect_mode !== 'm0') {
+      const dw = Math.min(w, detectWidth), dh = Math.max(1, Math.round((h * dw) / w));
+      const small = dw < w ? this.grabSmall(source, dw, dh, mirror) : rgba;
+      let prob = null;
+      if (cfg.detect_mode === 'm2') {
+        if (this.person.state === 'idle') this.person.load();
+        if (this.person.state === 'ready') {
+          // セグメンテーションには canvas を渡す（縮小しない場合も同じ canvas に描く）
+          if (dw === w) this.grabSmall(source, dw, dh, mirror);
+          try { prob = this.person.segment(this.grabSmall.canvas, dw, dh); } catch (e) { console.warn(e); }
+        }
       }
+      det = { ...detectSilhouette(small, dw, dh, cfg, dw / w, prob), mw: dw, mh: dh };
+      this.detCache = key ? { key, det } : null;
     }
     const detectMs = performance.now() - t0;
     const timing = this.renderPixels(rgba, w, h, frameIdx, cfg, det);

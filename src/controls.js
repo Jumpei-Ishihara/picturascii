@@ -6,8 +6,11 @@ export const SECTIONS = [
   {
     id: 'detect', title: 'DETECT', open: true,
     controls: [
-      { type: 'segmented', key: 'detect_mode', label: 'MODE', options: [['m0', 'FULL'], ['m1', 'AUTO'], ['m4', 'CHROMA']] },
+      { type: 'segmented', key: 'detect_mode', label: 'MODE', options: [['m0', 'FULL'], ['m1', 'AUTO'], ['m2', 'PERSON'], ['m4', 'CHROMA']] },
       sl('threshold', 'THRESHOLD', 0, 120, 1, '', { show: (c) => c.detect_mode === 'm1' }),
+      sl('mp_confidence', 'CONFIDENCE', 0.1, 0.9, 0.05, '', { show: (c) => c.detect_mode === 'm2' }),
+      sl('mp_smooth_edge', 'EDGE SMOOTH', 0, 10, 1, 'px', { show: (c) => c.detect_mode === 'm2' }),
+      { type: 'toggle', key: 'mp_detail_mode', label: 'DETAIL', show: (c) => c.detect_mode === 'm2' },
       { type: 'eyedrop', key: 'bg_color_hsv', label: 'KEY COLOR', show: (c) => c.detect_mode === 'm4' },
       sl('hue_tolerance', 'HUE TOLERANCE', 5, 60, 1, '', { show: (c) => c.detect_mode === 'm4' }),
       sl('sat_min', 'SAT MIN', 0, 150, 5, '', { show: (c) => c.detect_mode === 'm4' }),

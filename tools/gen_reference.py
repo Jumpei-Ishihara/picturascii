@@ -29,7 +29,16 @@ def main() -> None:
     for case in cases:
         frame = cv2.imread(str(ROOT / 'test' / 'fixtures' / case['image']))
         cfg = {**visualizer.DEFAULT_CONFIG, **case['cfg']}
-        out = visualizer.process_frame(frame, int(case['frame']), cfg)
+        mp_instance = None
+        if cfg['detect_mode'] == 'm2':
+            # デスクトップ版と同じ横長モデル（model_selection=1）
+            import mediapipe as mp
+            mp_instance = mp.solutions.selfie_segmentation.SelfieSegmentation(model_selection=1)
+            mask, _ = visualizer.detect_silhouette(frame, cfg, mp_instance=mp_instance)
+            cv2.imwrite(str(out_dir / f"{case['id']}_mask.png"), mask)
+        out = visualizer.process_frame(frame, int(case['frame']), cfg, mp_instance=mp_instance)
+        if mp_instance is not None:
+            mp_instance.close()
         cv2.imwrite(str(out_dir / f"{case['id']}.png"), out)
         print(case['id'], out.shape)
 

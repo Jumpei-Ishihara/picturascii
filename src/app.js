@@ -70,6 +70,7 @@ const syncPanel = buildPanel(els.panel, () => state.raw, updateCfg, { onPick: st
 
 function updateCfg(patch) {
   state.raw = { ...state.raw, ...patch };
+  if (state.raw.detect_mode === 'm2') loadPerson();
   saveCfg();
   syncPanel();
   markPresets();
@@ -83,6 +84,15 @@ function updateCfg(patch) {
   app.prepare(state.raw).then(apply, (e) => {
     console.warn('glyph sheets unavailable, using browser fonts', e);
     apply({ ...DEFAULT_CONFIG, ...state.raw });
+  });
+}
+
+// PERSON のモデルは選ばれたときに初めて読み込む（約12MB、同梱ファイル）
+function loadPerson() {
+  if (app.person.state !== 'idle') return;
+  app.person.load().then(() => { state.dirty = true; }, (e) => {
+    console.warn(e);
+    showMessage('PERSON could not start in this browser. Using AUTO instead.', true);
   });
 }
 
@@ -125,8 +135,10 @@ function stopSource() {
   state.source = null;
 }
 
+let sourceSeq = 0;
 function setSource(src) {
   stopSource();
+  src.id = ++sourceSeq;
   state.source = src;
   state.dirty = true;
   els.srcBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.src === src.kind)));
@@ -170,6 +182,11 @@ async function useCamera() {
     v.muted = true; v.playsInline = true; v.srcObject = stream;
     await v.play();
     setSource({ kind: 'camera', el: v, w: v.videoWidth, h: v.videoHeight, mirror: true });
+    // カメラでは人物の切り抜きが見どころなので、FULL のままなら PERSON に切り替える
+    if (state.raw.detect_mode === 'm0') {
+      updateCfg({ detect_mode: 'm2' });
+      showMessage('PERSON mode on — only you turn into ASCII.', true);
+    }
   } catch {
     showMessage('Camera unavailable. Check the camera permission for this site.', true);
   }
@@ -206,13 +223,19 @@ function render() {
   if (s.kind === 'sample') scene.draw(state.clock);
   const [w, h] = outputSize();
   const frameIdx = Math.floor(state.clock * 30);
-  const t = app.renderSource(s.el, w, h, frameIdx, cfg, { mirror: !!s.mirror });
+  const t = app.renderSource(s.el, w, h, frameIdx, cfg, {
+    mirror: !!s.mirror,
+    staticKey: s.kind === 'image' ? s.id : null,
+  });
   const now = performance.now();
   const dt = now - state.lastRenderAt;
   state.lastRenderAt = now;
   if (dt > 0 && dt < 1000) state.fps = state.fps ? state.fps * 0.9 + (1000 / dt) * 0.1 : 1000 / dt;
   const cell = dynamicCellSize(frameIdx, cfg);
-  els.hudL.textContent = `${s.kind.toUpperCase()} · ${w}×${h} · CELL ${cell}px`;
+  const person = cfg.detect_mode !== 'm2' ? ''
+    : app.person.state === 'ready' ? ' · PERSON'
+    : app.person.state === 'error' ? ' · PERSON → AUTO' : ' · PERSON LOADING…';
+  els.hudL.textContent = `${s.kind.toUpperCase()} · ${w}×${h} · CELL ${cell}px${person}`;
   els.hudR.textContent = `${state.playing ? `${Math.round(state.fps)} FPS` : 'PAUSED'} · ${(t.detectMs + t.gridMs + t.glMs).toFixed(0)} ms`;
 }
 

@@ -1,9 +1,13 @@
 // Python 参照画像と JS 版の描画結果を比較する
 import { Picturascii } from '../src/pipeline.js';
+import { detectSilhouette } from '../src/detect.js';
 
 // 合格基準（見た目が大きく変わらないこと）
 const MIN_PSNR = 30;
 const MAX_BIG_DIFF = 0.01; // |Δ|>32 の画素が 1% 未満
+// PERSON はデスクトップ版（旧 MediaPipe Solutions）と Web 版（Tasks）でモデル実装が異なるため、
+// 画素ではなくマスクの一致度（IoU）で判定する
+const MIN_PERSON_IOU = 0.9;
 
 const loadImage = async (url) => {
   const img = new Image();
@@ -64,16 +68,33 @@ async function main() {
     const w = src.naturalWidth, h = src.naturalHeight;
     const cfg = await app.prepare(c.cfg);
     const rgba = pixelsOf(src);
-    const timing = app.renderPixels(rgba, w, h, c.frame, cfg);
+    let det = null, iou = null;
+    if (cfg.detect_mode === 'm2') {
+      await app.person.load();
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(src, 0, 0);
+      det = detectSilhouette(rgba, w, h, cfg, 1, app.person.segment(cv, w, h));
+      const refMask = pixelsOf(await loadImage(`./reference/${c.id}_mask.png`));
+      let inter = 0, uni = 0;
+      for (let i = 0; i < w * h; i++) {
+        const a = det.mask[i] > 0, b = refMask[i * 4] > 127;
+        if (a && b) inter++;
+        if (a || b) uni++;
+      }
+      iou = uni ? inter / uni : 1;
+    }
+    const timing = app.renderPixels(rgba, w, h, c.frame, cfg, det);
     const js = app.gl.readPixels();
     const m = metrics(js, pixelsOf(ref), w, h);
-    const pass = m.psnr >= MIN_PSNR && m.bigRatio < MAX_BIG_DIFF;
-    results.push({ id: c.id, psnr: +m.psnr.toFixed(2), meanAbs: +m.meanAbs.toFixed(3), bigRatio: +m.bigRatio.toFixed(5), ...timing, pass });
+    const pass = iou !== null ? iou >= MIN_PERSON_IOU : m.psnr >= MIN_PSNR && m.bigRatio < MAX_BIG_DIFF;
+    results.push({ id: c.id, psnr: +m.psnr.toFixed(2), meanAbs: +m.meanAbs.toFixed(3), bigRatio: +m.bigRatio.toFixed(5), iou: iou === null ? null : +iou.toFixed(4), ...timing, pass });
 
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${c.id}</td><td>${m.psnr.toFixed(2)}</td><td>${m.meanAbs.toFixed(3)}</td>`
       + `<td>${(m.bigRatio * 100).toFixed(3)}%</td><td>${timing.detectMs.toFixed(1)}</td>`
       + `<td>${timing.gridMs.toFixed(1)}</td><td>${timing.glMs.toFixed(1)}</td>`
+      + `<td>${iou === null ? '—' : iou.toFixed(3)}</td>`
       + `<td class="${pass ? 'pass' : 'fail'}">${pass ? 'PASS' : 'FAIL'}</td>`;
     tbody.append(tr);
 

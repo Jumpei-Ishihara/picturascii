@@ -160,15 +160,8 @@ function morph(src, w, h, k, dilate) {
 const openOp = (m, w, h, k) => morph(morph(m, w, h, k, false), w, h, k, true);
 const closeOp = (m, w, h, k) => morph(morph(m, w, h, k, true), w, h, k, false);
 
-/**
- * visualizer._postprocess_mask: [OPEN→]CLOSE→微小領域除去→外輪郭の塗りつぶし。
- * 外輪郭の面積は画素数で近似する（cv2.contourArea より境界分だけ大きい）。
- */
-export function postprocessMask(mask, w, h, kClose, minAreaRatio, skipOpen = false, kOpen = 3) {
-  let m = skipOpen ? mask : openOp(mask, w, h, kOpen);
-  m = closeOp(m, w, h, kClose);
-
-  // 8連結成分のラベリング
+/** 8連結成分のラベリング。label[i] は成分番号（背景は -1）、areas は各成分の画素数 */
+function label8(m, w, h) {
   const n = w * h;
   const label = new Int32Array(n).fill(-1);
   const stack = new Int32Array(n);
@@ -195,6 +188,19 @@ export function postprocessMask(mask, w, h, kClose, minAreaRatio, skipOpen = fal
     }
     areas.push(area);
   }
+  return { label, areas, stack };
+}
+
+/**
+ * visualizer._postprocess_mask: [OPEN→]CLOSE→微小領域除去→外輪郭の塗りつぶし。
+ * 外輪郭の面積は画素数で近似する（cv2.contourArea より境界分だけ大きい）。
+ */
+export function postprocessMask(mask, w, h, kClose, minAreaRatio, skipOpen = false, kOpen = 3) {
+  let m = skipOpen ? mask : openOp(mask, w, h, kOpen);
+  m = closeOp(m, w, h, kClose);
+
+  const n = w * h;
+  const { label, areas, stack } = label8(m, w, h);
   const minArea = h * w * minAreaRatio;
   const keep = areas.map((a) => a >= minArea);
   const out = new Uint8Array(n);
@@ -218,6 +224,66 @@ export function postprocessMask(mask, w, h, kClose, minAreaRatio, skipOpen = fal
   return out;
 }
 
+/** float 配列のガウスぼかし（BORDER_REFLECT_101、sigma は cv2 の ksize 既定式） */
+function gaussianBlurF32(src, w, h, k) {
+  const sigma = 0.3 * ((k - 1) * 0.5 - 1) + 0.8;
+  const r = (k - 1) >> 1;
+  const wt = new Float32Array(k);
+  let sum = 0;
+  for (let i = 0; i < k; i++) { wt[i] = Math.exp(-((i - r) ** 2) / (2 * sigma * sigma)); sum += wt[i]; }
+  for (let i = 0; i < k; i++) wt[i] /= sum;
+  const ref = (i, n) => (n === 1 ? 0 : i < 0 ? -i : i >= n ? 2 * n - 2 - i : i);
+  const tmp = new Float32Array(w * h), out = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let a = 0;
+      for (let i = -r; i <= r; i++) a += src[y * w + ref(x + i, w)] * wt[i + r];
+      tmp[y * w + x] = a;
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let a = 0;
+      for (let i = -r; i <= r; i++) a += tmp[ref(y + i, h) * w + x] * wt[i + r];
+      out[y * w + x] = a;
+    }
+  }
+  return out;
+}
+
+/**
+ * visualizer._mask_person_mediapipe。prob は人物らしさ（0〜1、w×h）。
+ * DETAIL ON では、強い人物領域に接する弱い候補の連結成分だけを追加する（手指・腕の欠け対策）。
+ */
+export function personMask(prob, w, h, cfg, kScale = 1) {
+  const conf = cfg.mp_confidence;
+  const se = Math.trunc(cfg.mp_smooth_edge);
+  if (se > 0) {
+    const k = scaleKernel(se * 2 + 1, kScale);
+    if (k > 1) prob = gaussianBlurF32(prob, w, h, k);
+  }
+  const n = w * h;
+  const strong = new Uint8Array(n);
+  for (let i = 0; i < n; i++) strong[i] = prob[i] > conf ? 255 : 0;
+  if (!cfg.mp_detail_mode) return strong;
+
+  const weakConf = Math.max(0.05, conf - 0.15);
+  const weak = new Uint8Array(n);
+  for (let i = 0; i < n; i++) weak[i] = prob[i] > weakConf ? 255 : 0;
+  const { label, areas } = label8(weak, w, h);
+  if (!areas.length) return strong;
+  const touch = morph(strong, w, h, scaleKernel(3, kScale), true);
+  const keep = new Uint8Array(areas.length);
+  for (let i = 0; i < n; i++) if (touch[i] && label[i] >= 0) keep[label[i]] = 1;
+  const minKeep = Math.max(8, Math.trunc(h * w * 0.00002));
+  const out = strong;
+  for (let i = 0; i < n; i++) {
+    const l = label[i];
+    if (l >= 0 && keep[l] && areas[l] >= minKeep) out[i] = 255;
+  }
+  return out;
+}
+
 /** カーネルサイズを縮小率に合わせる（奇数を保つ） */
 const scaleKernel = (k, s) => (s === 1 ? k : Math.max(1, 2 * Math.round((k * s - 1) / 2) + 1));
 
@@ -225,16 +291,20 @@ const scaleKernel = (k, s) => (s === 1 ? k : Math.max(1, 2 * Math.round((k * s -
  * visualizer.detect_silhouette。M0 は null（全面）を返す。
  * kScale: 元解像度に対する rgba の縮小率。縮小画像で検出するときにカーネルサイズを合わせる。
  */
-export function detectSilhouette(rgba, w, h, cfg, kScale = 1) {
+export function detectSilhouette(rgba, w, h, cfg, kScale = 1, personProb = null) {
   const mode = cfg.detect_mode;
   if (mode === 'm0') return { mask: null };
 
-  let mask, kClose, minAreaRatio;
-  if (mode === 'm4') {
+  let mask, kClose, minAreaRatio, skipOpen = false;
+  if (mode === 'm2' && personProb) {
+    mask = personMask(personProb, w, h, cfg, kScale);
+    [kClose, minAreaRatio] = cfg.mp_detail_mode ? [7, 0.0015] : [9, 0.005];
+    skipOpen = true;
+  } else if (mode === 'm4') {
     mask = maskChroma(rgba, w, h, cfg);
     kClose = 15; minAreaRatio = 0.005;
   } else {
-    // m1 AUTO（m2/m3 は Web 版 v0.1 では m1 に降格）
+    // m1 AUTO（PERSON のモデル準備前と m3 は m1 に降格。デスクトップ版と同じ扱い）
     const gray = toGray(rgba, w, h);
     const m = cornerMargin(w, h);
     let sum = 0, cnt = 0;
@@ -250,7 +320,7 @@ export function detectSilhouette(rgba, w, h, cfg, kScale = 1) {
       kClose = 15; minAreaRatio = 0.01;
     }
   }
-  mask = postprocessMask(mask, w, h, scaleKernel(kClose, kScale), minAreaRatio, false, scaleKernel(3, kScale));
+  mask = postprocessMask(mask, w, h, scaleKernel(kClose, kScale), minAreaRatio, skipOpen, scaleKernel(3, kScale));
   if (cfg.mask_invert) for (let i = 0; i < mask.length; i++) mask[i] = 255 - mask[i];
   return { mask };
 }
